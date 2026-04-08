@@ -12,6 +12,7 @@ It supports:
 - bookmarking and unbookmarking classes
 - multi-profile setups
 - optional cache bypass with `--refresh`
+- optional full workout hydration with `--full-metrics`
 
 ## Features
 
@@ -79,6 +80,7 @@ Run from the repo root:
 ```bash
 python3 scripts/peloton.py weekly
 python3 scripts/peloton.py --refresh weekly
+python3 scripts/peloton.py --full-metrics workouts 20
 python3 scripts/peloton.py --profile primary today
 python3 scripts/peloton.py --profile partner workouts 10
 python3 scripts/peloton.py --profile primary latest
@@ -118,4 +120,5 @@ python3 scripts/peloton.py unbookmark-class <ride_id>
 - Some write endpoints require the `Peloton-Platform: web` header.
 - The CLI caches certain responses under `~/.openclaw/cache/peloton/`.
 - Use `--refresh` when you explicitly want to bypass cached responses.
+- Use `--full-metrics` when you want the heavier mode that hydrates every workout in the returned set with performance metrics.
 - This project is not affiliated with Peloton.

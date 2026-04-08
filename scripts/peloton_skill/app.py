@@ -57,11 +57,12 @@ def enrich_sparse_workouts(
 
 
 def usage() -> str:
-    return """Usage: python3 scripts/peloton.py [--profile <name>] [--refresh] [--discipline <name>] [--instructor <name>] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--title <text>] [--class-type <text>] [--duration <minutes>] [--min-duration <minutes>] [--max-duration <minutes>] [--min-difficulty <n>] [--max-difficulty <n>] [--explicit true|false] [--captions true|false] [--available true|false] [--bookmarked true|false] [--song <text>] [--artist <text>] [--sort <name>] [--bookmark true|false] [--playlist true|false] <command> [args] [--json]
+    return """Usage: python3 scripts/peloton.py [--profile <name>] [--refresh] [--full-metrics] [--discipline <name>] [--instructor <name>] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--title <text>] [--class-type <text>] [--duration <minutes>] [--min-duration <minutes>] [--max-duration <minutes>] [--min-difficulty <n>] [--max-difficulty <n>] [--explicit true|false] [--captions true|false] [--available true|false] [--bookmarked true|false] [--song <text>] [--artist <text>] [--sort <name>] [--bookmark true|false] [--playlist true|false] <command> [args] [--json]
 
 Commands:
   --profile <name>
   --refresh
+  --full-metrics
   --discipline <name>
   --instructor <name>
   --since YYYY-MM-DD
@@ -105,7 +106,7 @@ Commands:
 
 
 def main(argv: list[str]) -> int:
-    profile_arg, json_output, refresh, filters, args = parse_args(argv)
+    profile_arg, json_output, refresh, full_metrics, filters, args = parse_args(argv)
     if not args:
         print(usage().strip())
         return 1
@@ -123,8 +124,8 @@ def main(argv: list[str]) -> int:
             creds_b = load_credentials(profile_b)
             client_a = PelotonClient(creds_a["username"], creds_a["password"], refresh_cache=refresh)
             client_b = PelotonClient(creds_b["username"], creds_b["password"], refresh_cache=refresh)
-            workouts_a = client_a.normalized_workouts(limit=50, include_metrics=False)
-            workouts_b = client_b.normalized_workouts(limit=50, include_metrics=False)
+            workouts_a = client_a.normalized_workouts(limit=50, include_metrics=full_metrics)
+            workouts_b = client_b.normalized_workouts(limit=50, include_metrics=full_metrics)
             summary_a = summarize_profile_window(profile_a, workouts_a, days, filters)
             summary_b = summarize_profile_window(profile_b, workouts_b, days, filters)
             print(
@@ -148,7 +149,7 @@ def main(argv: list[str]) -> int:
             return 0
         if command == "workouts":
             limit = int(rest[0]) if rest else 10
-            include_metrics = limit <= 10
+            include_metrics = full_metrics or limit <= 10
             data = client.normalized_workouts(limit=limit, include_metrics=include_metrics)
             data = apply_filters(data, filters)
             print(json.dumps(data, indent=2) if json_output else render_workouts(data))
@@ -173,46 +174,51 @@ def main(argv: list[str]) -> int:
             return 0
         if command == "summary":
             days = int(rest[0]) if rest else 7
-            workouts = client.normalized_workouts(limit=25, include_metrics=False)
+            workouts = client.normalized_workouts(limit=25, include_metrics=full_metrics)
             filtered = apply_filters(workouts_in_window(workouts, days), filters)
-            filtered = enrich_sparse_workouts(client, filtered)
+            if not full_metrics:
+                filtered = enrich_sparse_workouts(client, filtered)
             print(render_summary(filtered, days, filters) if not json_output else json.dumps(filtered, indent=2))
             return 0
         if command == "weekly":
-            workouts = client.normalized_workouts(limit=25, include_metrics=False)
+            workouts = client.normalized_workouts(limit=25, include_metrics=full_metrics)
             filtered = apply_filters(workouts_in_window(workouts, 7), filters)
-            filtered = enrich_sparse_workouts(client, filtered)
+            if not full_metrics:
+                filtered = enrich_sparse_workouts(client, filtered)
             print(render_summary(filtered, 7, filters) if not json_output else json.dumps(filtered, indent=2))
             return 0
         if command == "today":
-            workouts = client.normalized_workouts(limit=25, include_metrics=False)
+            workouts = client.normalized_workouts(limit=25, include_metrics=full_metrics)
             now = datetime.now().astimezone()
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             window = apply_filters(workouts_between(workouts, start=start, end=now), filters)
-            window = enrich_sparse_workouts(client, window)
+            if not full_metrics:
+                window = enrich_sparse_workouts(client, window)
             print(render_named_window_summary(window, title="Peloton Today", filters=filters) if not json_output else json.dumps(window, indent=2))
             return 0
         if command == "yesterday":
-            workouts = client.normalized_workouts(limit=25, include_metrics=False)
+            workouts = client.normalized_workouts(limit=25, include_metrics=full_metrics)
             now = datetime.now().astimezone()
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             start = today_start - timedelta(days=1)
             window = apply_filters(workouts_between(workouts, start=start, end=today_start), filters)
-            window = enrich_sparse_workouts(client, window)
+            if not full_metrics:
+                window = enrich_sparse_workouts(client, window)
             print(render_named_window_summary(window, title="Peloton Yesterday", filters=filters) if not json_output else json.dumps(window, indent=2))
             return 0
         if command == "month":
-            workouts = client.normalized_workouts(limit=50, include_metrics=False)
+            workouts = client.normalized_workouts(limit=50, include_metrics=full_metrics)
             now = datetime.now().astimezone()
             start = now - timedelta(days=30)
             window = apply_filters(workouts_between(workouts, start=start, end=now), filters)
-            window = enrich_sparse_workouts(client, window)
+            if not full_metrics:
+                window = enrich_sparse_workouts(client, window)
             print(render_named_window_summary(window, title="Peloton Last 30 Days", filters=filters) if not json_output else json.dumps(window, indent=2))
             return 0
         if command == "compare":
             recent_days = int(rest[0]) if rest else 7
             previous_days = int(rest[1]) if len(rest) > 1 else recent_days
-            workouts = client.normalized_workouts(limit=50, include_metrics=False)
+            workouts = client.normalized_workouts(limit=50, include_metrics=full_metrics)
             print(render_compare_summary(workouts, recent_days, previous_days, filters) if not json_output else json.dumps({"recent_days": recent_days, "previous_days": previous_days}, indent=2))
             return 0
         if command == "classes":

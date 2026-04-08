@@ -8,10 +8,11 @@ from pathlib import Path
 from .common import PelotonError, QueryFilters, env_key_part, parse_bool_arg
 
 
-def parse_args(argv: list[str]) -> tuple[str | None, bool, bool, QueryFilters, list[str]]:
+def parse_args(argv: list[str]) -> tuple[str | None, bool, bool, bool, QueryFilters, list[str]]:
     profile = None
     json_output = False
     refresh = False
+    full_metrics = False
     filters = QueryFilters()
     args: list[str] = []
     i = 0
@@ -27,6 +28,10 @@ def parse_args(argv: list[str]) -> tuple[str | None, bool, bool, QueryFilters, l
             continue
         if arg == "--refresh":
             refresh = True
+            i += 1
+            continue
+        if arg == "--full-metrics":
+            full_metrics = True
             i += 1
             continue
         if arg == "--discipline":
@@ -154,7 +159,7 @@ def parse_args(argv: list[str]) -> tuple[str | None, bool, bool, QueryFilters, l
         else:
             args.append(arg)
         i += 1
-    return profile, json_output, refresh, filters, args
+    return profile, json_output, refresh, full_metrics, filters, args
 
 
 def parse_date_arg(value: str, *, end_of_day: bool) -> datetime:
