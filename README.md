@@ -11,6 +11,7 @@ It supports:
 - class recommendations
 - bookmarking and unbookmarking classes
 - multi-profile setups
+- optional cache bypass with `--refresh`
 
 ## Features
 
@@ -23,6 +24,7 @@ It supports:
 - `recommend` command for curated class shortlists
 - Bookmark / unbookmark class actions
 - Lightweight local cache
+- Short delay between uncached API requests to avoid hammering Peloton
 
 ## Setup
 
@@ -76,6 +78,7 @@ Run from the repo root:
 
 ```bash
 python3 scripts/peloton.py weekly
+python3 scripts/peloton.py --refresh weekly
 python3 scripts/peloton.py --profile primary today
 python3 scripts/peloton.py --profile partner workouts 10
 python3 scripts/peloton.py --profile primary latest
@@ -114,4 +117,5 @@ python3 scripts/peloton.py unbookmark-class <ride_id>
 - This project uses the unofficial Peloton API and may break if Peloton changes its backend.
 - Some write endpoints require the `Peloton-Platform: web` header.
 - The CLI caches certain responses under `~/.openclaw/cache/peloton/`.
+- Use `--refresh` when you explicitly want to bypass cached responses.
 - This project is not affiliated with Peloton.

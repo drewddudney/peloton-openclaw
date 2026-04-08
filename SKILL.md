@@ -19,6 +19,7 @@ python3 scripts/peloton.py --profile partner settings
 
 # Workout history
 python3 scripts/peloton.py weekly
+python3 scripts/peloton.py --refresh weekly
 python3 scripts/peloton.py --profile primary today
 python3 scripts/peloton.py --profile partner yesterday
 python3 scripts/peloton.py --profile primary month
@@ -105,6 +106,7 @@ Do not expose credentials or raw auth tokens.
 ## Command Guidance
 
 - Choose a profile with `--profile <name>` when you manage more than one Peloton account.
+- Use `--refresh` when you need fresh data and want to bypass the local cache for that run.
 - Use `--discipline <name>` to focus summaries or workout lists on one modality.
 - Use `--instructor <name>` for instructor-specific workout or class browsing.
 - Use `--since YYYY-MM-DD` and `--until YYYY-MM-DD` to constrain results to a date range.
