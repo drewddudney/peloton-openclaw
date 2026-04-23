@@ -172,12 +172,15 @@ class PelotonClient:
 
     def workouts(self, limit: int = 10, page: int = 0) -> list[dict[str, Any]]:
         me = self.me()
-        cache_key = f"workouts-{me['id']}-{limit}-{page}"
+        return self.user_workouts(str(me["id"]), limit=limit, page=page)
+
+    def user_workouts(self, user_id: str, *, limit: int = 10, page: int = 0) -> list[dict[str, Any]]:
+        cache_key = f"workouts-{user_id}-{limit}-{page}"
         cached = self._cache_get(cache_key)
         if cached is not None:
             return cached
         response = self.get(
-            f"/api/user/{me['id']}/workouts",
+            f"/api/user/{user_id}/workouts",
             params={"joins": "ride,ride.instructor", "limit": limit, "page": page, "sort_by": "-created"},
         )
         data = response.get("data", [])
@@ -258,6 +261,20 @@ class PelotonClient:
         self.cache.set(cache_key, data)
         return data
 
+    def following(self, *, limit: int = 25, page: int = 0) -> list[dict[str, Any]]:
+        me = self.me()
+        cache_key = f"following-{me['id']}-{limit}-{page}"
+        cached = self._cache_get(cache_key, ttl_seconds=60 * 60)
+        if cached is not None:
+            return cached
+        response = self.get(
+            f"/api/user/{me['id']}/following",
+            params={"limit": limit, "page": page},
+        )
+        data = response.get("data", [])
+        self.cache.set(cache_key, data)
+        return data
+
     def classes(self, discipline: str | None = None, limit: int = 10) -> dict[str, Any]:
         cache_key = f"classes-{discipline or 'all'}-{limit}"
         cached = self._cache_get(cache_key, ttl_seconds=60 * 60)
@@ -298,6 +315,26 @@ class PelotonClient:
         every_n: int = 5,
     ) -> list[dict[str, Any]]:
         workouts = self.workouts(limit=limit, page=page)
+        return [
+            self.normalized_workout(
+                workout["id"],
+                workout=workout,
+                include_metrics=include_metrics,
+                every_n=every_n,
+            )
+            for workout in workouts
+        ]
+
+    def normalized_user_workouts(
+        self,
+        user_id: str,
+        *,
+        limit: int = 10,
+        page: int = 0,
+        include_metrics: bool = False,
+        every_n: int = 5,
+    ) -> list[dict[str, Any]]:
+        workouts = self.user_workouts(user_id, limit=limit, page=page)
         return [
             self.normalized_workout(
                 workout["id"],

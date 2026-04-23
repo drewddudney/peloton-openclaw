@@ -183,3 +183,130 @@ def summarize_profile_window(profile: str, workouts: list[dict[str, Any]], days:
     totals["profile"] = profile
     totals["workouts"] = filtered
     return totals
+
+
+def leaderboard_percentile(rank: Any, total: Any) -> float | None:
+    if rank in (None, "", 0) or total in (None, "", 0):
+        return None
+    try:
+        rank_value = float(rank)
+        total_value = float(total)
+    except (TypeError, ValueError):
+        return None
+    if rank_value <= 0 or total_value <= 0:
+        return None
+    return max(0.0, ((total_value - rank_value) / total_value) * 100.0)
+
+
+def leaderboard_top_percent(rank: Any, total: Any) -> float | None:
+    if rank in (None, "", 0) or total in (None, "", 0):
+        return None
+    try:
+        rank_value = float(rank)
+        total_value = float(total)
+    except (TypeError, ValueError):
+        return None
+    if rank_value <= 0 or total_value <= 0:
+        return None
+    return min(100.0, (rank_value / total_value) * 100.0)
+
+
+def summarize_leaderboard(workouts: list[dict[str, Any]]) -> dict[str, Any]:
+    ranked = [
+        workout
+        for workout in workouts
+        if workout.get("leaderboard_rank") not in (None, "", 0)
+        and workout.get("leaderboard_total") not in (None, "", 0)
+    ]
+    if not ranked:
+        return {
+            "count": len(workouts),
+            "ranked_count": 0,
+            "best_rank": None,
+            "best_percentile": None,
+            "median_percentile": None,
+            "average_percentile": None,
+            "average_top_percent": None,
+            "top_10_finishes": 0,
+            "top_25_finishes": 0,
+            "ranked_workouts": [],
+        }
+
+    ranked_with_stats: list[dict[str, Any]] = []
+    percentiles: list[float] = []
+    top_percents: list[float] = []
+    for workout in ranked:
+        percentile = leaderboard_percentile(
+            workout.get("leaderboard_rank"),
+            workout.get("leaderboard_total"),
+        )
+        top_percent = leaderboard_top_percent(
+            workout.get("leaderboard_rank"),
+            workout.get("leaderboard_total"),
+        )
+        enriched = dict(workout)
+        enriched["leaderboard_percentile"] = percentile
+        enriched["leaderboard_top_percent"] = top_percent
+        ranked_with_stats.append(enriched)
+        if percentile is not None:
+            percentiles.append(percentile)
+        if top_percent is not None:
+            top_percents.append(top_percent)
+
+    ranked_by_finish = sorted(
+        ranked_with_stats,
+        key=lambda item: (
+            float(item.get("leaderboard_top_percent") or 1000.0),
+            float(item.get("leaderboard_rank") or 1e9),
+        ),
+    )
+    sorted_percentiles = sorted(percentiles)
+    mid = len(sorted_percentiles) // 2
+    if len(sorted_percentiles) % 2 == 1:
+        median_percentile = sorted_percentiles[mid]
+    else:
+        median_percentile = (
+            (sorted_percentiles[mid - 1] + sorted_percentiles[mid]) / 2.0
+            if sorted_percentiles
+            else None
+        )
+
+    return {
+        "count": len(workouts),
+        "ranked_count": len(ranked_with_stats),
+        "best_rank": ranked_by_finish[0].get("leaderboard_rank"),
+        "best_percentile": ranked_by_finish[0].get("leaderboard_percentile"),
+        "median_percentile": median_percentile,
+        "average_percentile": (sum(percentiles) / len(percentiles)) if percentiles else None,
+        "average_top_percent": (sum(top_percents) / len(top_percents)) if top_percents else None,
+        "top_10_finishes": sum(1 for value in top_percents if value is not None and value <= 10.0),
+        "top_25_finishes": sum(1 for value in top_percents if value is not None and value <= 25.0),
+        "ranked_workouts": ranked_by_finish,
+    }
+
+
+def leaderboard_trend_buckets(workouts: list[dict[str, Any]], days: int, *, bucket_days: int = 7) -> list[dict[str, Any]]:
+    ranked = summarize_leaderboard(workouts)
+    ranked_workouts = ranked.get("ranked_workouts") or []
+    if not ranked_workouts:
+        return []
+    now = datetime.now().astimezone()
+    buckets: list[dict[str, Any]] = []
+    start = now - timedelta(days=days)
+    cursor = start
+    while cursor < now:
+        end = min(cursor + timedelta(days=bucket_days), now)
+        bucket_workouts = workouts_between(ranked_workouts, start=cursor, end=end)
+        summary = summarize_leaderboard(bucket_workouts)
+        buckets.append(
+            {
+                "start": cursor,
+                "end": end,
+                "count": summary["count"],
+                "ranked_count": summary["ranked_count"],
+                "average_percentile": summary["average_percentile"],
+                "top_25_finishes": summary["top_25_finishes"],
+            }
+        )
+        cursor = end
+    return buckets

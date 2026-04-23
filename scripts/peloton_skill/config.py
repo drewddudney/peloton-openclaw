@@ -177,9 +177,13 @@ def resolve_secrets_path() -> Path:
     if explicit:
         return Path(explicit).expanduser()
 
+    base = Path.home() / ".openclaw" / "secrets"
     profile = os.environ.get("PELOTON_PROFILE")
-    filename = f"peloton-{profile}.json" if profile else "peloton.json"
-    return Path.home() / ".openclaw" / "secrets" / filename
+    if profile:
+        profile_path = base / f"peloton-{profile}.json"
+        if profile_path.exists():
+            return profile_path
+    return base / "peloton.json"
 
 
 def selected_profile(explicit_profile: str | None) -> str:
@@ -219,19 +223,50 @@ def load_credentials(profile: str) -> dict[str, str]:
     except json.JSONDecodeError as exc:
         raise PelotonError(f"Invalid JSON in secrets file {path}: {exc}") from exc
 
+    available_profiles = [
+        key for key, value in data.items()
+        if isinstance(key, str) and isinstance(value, dict) and value.get("username") and value.get("password")
+    ]
+
     if profile:
         profile_data = data.get(profile)
         if not isinstance(profile_data, dict):
-            raise PelotonError(f"Secrets file {path} must contain a top-level '{profile}' object.")
+            suffix = ""
+            if available_profiles:
+                suffix = f" Available profiles: {', '.join(sorted(available_profiles))}."
+            raise PelotonError(
+                f"Secrets file {path} must contain a top-level '{profile}' object."
+                f"{suffix} Use --profile <name> or set PELOTON_PROFILE=<name>."
+            )
         username = profile_data.get("username")
         password = profile_data.get("password")
     else:
         username = data.get("username")
         password = data.get("password")
+        if (not username or not password) and available_profiles:
+            fallback_profile = None
+            for candidate in ("primary", "default"):
+                if candidate in available_profiles:
+                    fallback_profile = candidate
+                    break
+            if fallback_profile is None and len(available_profiles) == 1:
+                fallback_profile = available_profiles[0]
+            if fallback_profile:
+                profile_data = data.get(fallback_profile) or {}
+                username = profile_data.get("username")
+                password = profile_data.get("password")
 
     if not username or not password:
         if profile:
             raise PelotonError(f"Secrets file {path} must contain {profile}.username and {profile}.password.")
-        raise PelotonError(f"Secrets file {path} must contain username and password for the default profile.")
+        if available_profiles:
+            raise PelotonError(
+                f"Secrets file {path} does not contain username/password for the default profile. "
+                f"Available profiles: {', '.join(sorted(available_profiles))}. "
+                f"Use --profile <name> or set PELOTON_PROFILE=<name>."
+            )
+        raise PelotonError(
+            f"Secrets file {path} must contain username and password for the default profile."
+        )
 
     return {"username": username, "password": password}
